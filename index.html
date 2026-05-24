@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Communal Server — Build Itinerary</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #4ade80;
+    --green-dim: #166534;
+    --green-glow: rgba(74, 222, 128, 0.25);
+    --dirt: #92400e;
+    --stone: #78716c;
+    --bg: #0a0f0a;
+    --panel: #0f1a0f;
+    --border: #1a3a1a;
+    --text: #d1fae5;
+    --muted: #6b7280;
+    --done-bg: #052e16;
+    --inprog-bg: #1c1917;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    padding: 2rem 1rem 4rem;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* Pixel grid bg */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(74,222,128,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(74,222,128,0.03) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrapper {
+    max-width: 800px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 2px solid var(--border);
+    position: relative;
+  }
+
+  .server-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 1rem;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: 2px;
+    image-rendering: pixelated;
+  }
+
+  .pixel {
+    border-radius: 1px;
+  }
+
+  h1 {
+    font-family: 'Silkscreen', monospace;
+    font-size: clamp(1.4rem, 5vw, 2.2rem);
+    color: var(--green);
+    text-shadow: 0 0 20px var(--green-glow), 0 0 40px var(--green-glow);
+    letter-spacing: 0.05em;
+    line-height: 1.2;
+    margin-bottom: 0.5rem;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .blink {
+    animation: blink 1.2s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* Section headers */
+  .section-label {
+    font-family: 'Silkscreen', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Task cards */
+  .tasks {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .task {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green-dim);
+    padding: 1rem 1.25rem;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.75rem;
+    align-items: start;
+    transition: border-color 0.15s, background 0.15s;
+    cursor: default;
+    animation: fadeIn 0.4s ease both;
+  }
+
+  .task:hover {
+    border-color: var(--green);
+    background: #111b11;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .task:nth-child(1) { animation-delay: 0.05s; }
+  .task:nth-child(2) { animation-delay: 0.10s; }
+  .task:nth-child(3) { animation-delay: 0.15s; }
+  .task:nth-child(4) { animation-delay: 0.20s; }
+  .task:nth-child(5) { animation-delay: 0.25s; }
+  .task:nth-child(6) { animation-delay: 0.30s; }
+  .task:nth-child(7) { animation-delay: 0.35s; }
+  .task:nth-child(8) { animation-delay: 0.40s; }
+  .task:nth-child(9) { animation-delay: 0.45s; }
+
+  .task-num {
+    font-size: 0.7rem;
+    color: var(--muted);
+    padding-top: 2px;
+    min-width: 1.5rem;
+  }
+
+  .task-content {}
+
+  .task-name {
+    font-family: 'Silkscreen', monospace;
+    font-size: 0.8rem;
+    color: var(--green);
+    margin-bottom: 0.35rem;
+    line-height: 1.4;
+  }
+
+  .task-detail {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    line-height: 1.5;
+  }
+
+  .task-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.4rem;
+  }
+
+  .tag {
+    font-size: 0.6rem;
+    font-family: 'Silkscreen', monospace;
+    padding: 2px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+    letter-spacing: 0.05em;
+  }
+
+  .tag-build    { background: #1e3a5f; color: #60a5fa; border: 1px solid #1d4ed8; }
+  .tag-infra    { background: #3b1f00; color: #fb923c; border: 1px solid #92400e; }
+  .tag-farm     { background: #14532d; color: #4ade80; border: 1px solid #166534; }
+  .tag-cosmetic { background: #2d1b69; color: #c4b5fd; border: 1px solid #5b21b6; }
+  .tag-assign   { background: #1c1917; color: #a8a29e; border: 1px solid #44403c; font-size: 0.58rem; }
+
+  /* Zone badge */
+  .zone {
+    font-size: 0.6rem;
+    color: var(--muted);
+    font-family: 'Share Tech Mono', monospace;
+    margin-top: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .zone::before {
+    content: '◆';
+    font-size: 0.45rem;
+    color: var(--green-dim);
+  }
+
+  /* Status bar at bottom */
+  .statusbar {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .status-left {
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+
+  .progress-track {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+
+  .progress-bar {
+    width: 120px;
+    height: 8px;
+    background: var(--border);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--green);
+    width: 11%;
+    box-shadow: 0 0 8px var(--green-glow);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  /* Checkboxes */
+  .checkbox {
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--green-dim);
+    border-radius: 2px;
+    margin-top: 2px;
+    flex-shrink: 0;
+    position: relative;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .checkbox:hover { border-color: var(--green); }
+  .checkbox.checked { border-color: var(--green); background: var(--green-dim); }
+  .checkbox.checked::after {
+    content: '✓';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: var(--green);
+  }
+
+  /* Glow pulse on header */
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    height: 1px;
+    background: var(--green);
+    box-shadow: 0 0 20px var(--green), 0 0 40px var(--green-glow);
+    animation: pulse 2.5s ease-in-out infinite;
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <header>
+    <!-- Pixel grass block icon -->
+    <div class="server-icon">
+      <div class="pixel" style="background:#4ade80"></div>
+      <div class="pixel" style="background:#22c55e"></div>
+      <div class="pixel" style="background:#4ade80"></div>
+      <div class="pixel" style="background:#16a34a"></div>
+      <div class="pixel" style="background:#16a34a"></div>
+      <div class="pixel" style="background:#4ade80"></div>
+      <div class="pixel" style="background:#15803d"></div>
+      <div class="pixel" style="background:#22c55e"></div>
+      <div class="pixel" style="background:#92400e"></div>
+      <div class="pixel" style="background:#78350f"></div>
+      <div class="pixel" style="background:#92400e"></div>
+      <div class="pixel" style="background:#78350f"></div>
+      <div class="pixel" style="background:#78350f"></div>
+      <div class="pixel" style="background:#92400e"></div>
+      <div class="pixel" style="background:#78350f"></div>
+      <div class="pixel" style="background:#92400e"></div>
+    </div>
+    <h1>COMMUNAL SERVER<br>BUILD ITINERARY</h1>
+    <p class="subtitle">Active Projects &nbsp;·&nbsp; 9 Tasks &nbsp;·&nbsp; <span class="blink">●</span> Online</p>
+  </header>
+
+  <!-- OVERWORLD SECTION -->
+  <div class="section-label">◈ Overworld</div>
+  <div class="tasks">
+
+    <div class="task">
+      <div class="checkbox" onclick="this.classList.toggle('checked')"></div>
+      <div class="task-content">
+        <div class="task-name">Church Texturing + Bell Tower Build</div>
+        <div class="task-detail">Apply full texture pass to the church exterior &amp; interior. Max to design and construct the towers rising above the roofline.</div>
+        <div class="zone">Spawn District</div>
+      </div>
+      <div class="task-meta">
+        <span class="tag tag-build">BUILD</span>
+        <span class="tag tag-assign">@ Max</span>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="checkbox" onclick="this.classList.toggle('checked')"></div>
+      <div class="task-content">
+        <div class="task-name">Underground Villager Trading Hall</div>
+        <div class="task-detail">Excavate and build out the communal trading hall beneath the surface. Workstation layout, lighting, curing stations, and mob-proof cells.</div>
+        <div class="zone">Underground</div>
+      </div>
+      <div class="task-meta">
+        <span class="tag tag-infra">INFRA</span>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="checkbox" onclick="this.classList.toggle('checked')"></div>
+      <div class="task-content">
+        <div class="task-name">Jack's Tree — Finish</div>
+        <div class="task-detail">Jack to complete the large custom tree build. Fill canopy, detail the trunk, add roots and surrounding foliage.</div>
+        <div class="zone">Spawn District</div>
+      </div>
+      <div class="task-meta">
+        <span class="tag tag-build">BUILD</span>
+        <span class="tag tag-assign">@ Jack</span>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="checkbox" onclick="this.classList.toggle('checked')"></div>
+      <div class="task-content">
+        <div class="task-name">Bifrost + Floating Islands</div>
+        <div class="task-detail">Build the Bifrost bridge connecting a series of floating sky islands. Each island is its own distinct biome or build theme.</div>
+        <div class="zone">Sky / Hub Area</div>
+      </div>
+      <div class="task-meta">
+        <span class="tag tag-build">BUILD</span>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="checkbox" onclick="this.classList.toggle('checked')"></div>
+      <div class="task-content">
+        <div class="task-name">Main Path — Fencing &amp; Foliage</div>
+        <div class="task-detail">Extend and finish the path network. Add fence borders, lanterns, flower patches, bushes, and ambient greenery along both sides.</div>
+        <div class="zone">Overworld Roads</div>
+      </div>
+      <div class="task-meta">
+        <span class="tag tag-cosmetic">COSMETIC</span>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="checkbox" onclick="this.classList.toggle('checked')"></div>
+      <div class="task-content">
+        <div class="task-name">Cobble Generator Watchtower</div>
+        <div class="task-detail">Wrap a proper watchtower structure around the cobble generator. Should be functional but also look like a real defensive outpost.</div>
+        <div class="zone">Resource District</div>
+      </div>
+      <div class="task-meta">
+        <span class="tag tag-build">BUILD</span>
+        <span class="tag tag-cosmetic">COSMETIC</span>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="checkbox" onclick="this.classList.toggle('checked')"></div>
+      <div class="task-content">
+        <div class="task-name">Giant Forge — Cosmetic Shell</div>
+        <div class="task-detail">Auto-smelter and bamboo farm are functional. Needs the outer forge building: stonework exterior, chimney stacks, decorative details to hide the machinery inside.</div>
+        <div class="zone">Industry Quarter</div>
+      </div>
+      <div class="task-meta">
+        <span class="tag tag-cosmetic">COSMETIC</span>
+        <span class="tag tag-farm">FARM ✓</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- NETHER SECTION -->
+  <div class="section-label">◈ Nether</div>
+  <div class="tasks">
+
+    <div class="task" style="border-left-color: #7f1d1d;">
+      <div class="checkbox" onclick="this.classList.toggle('checked')"></div>
+      <div class="task-content">
+        <div class="task-name">Nether Hub — Roof Build</div>
+        <div class="task-detail">Design and construct the main nether hub on the nether roof. Central travel node connecting farms, portals, and future nether projects.</div>
+        <div class="zone">Nether Roof</div>
+      </div>
+      <div class="task-meta">
+        <span class="tag tag-infra">INFRA</span>
+      </div>
+    </div>
+
+    <div class="task" style="border-left-color: #7f1d1d;">
+      <div class="checkbox" onclick="this.classList.toggle('checked')"></div>
+      <div class="task-content">
+        <div class="task-name">Gold Farm + Piglin Trading Integration</div>
+        <div class="task-detail">Build the gold farm on the nether roof. Output should funnel directly into a piglin bartering farm — fully automated gold-to-loot pipeline.</div>
+        <div class="zone">Nether Roof</div>
+      </div>
+      <div class="task-meta">
+        <span class="tag tag-farm">FARM</span>
+        <span class="tag tag-infra">INFRA</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Status Bar -->
+  <div class="statusbar">
+    <div class="status-left">// server-itinerary-v1.txt &nbsp;|&nbsp; 9 tasks registered</div>
+    <div class="progress-track">
+      <span>PROGRESS</span>
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+      <span>1 / 9</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
